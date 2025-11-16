@@ -57,6 +57,19 @@ service:
   port: 8080
   targetPort: 8080 # CUSTOM
 
+# Environment variables (legacy, prefer envFrom)
+env: []
+# - name: MY_VAR
+#   value: "my-value"
+
+# Environment variables from ConfigMaps/Secrets (recommended)
+# This will be populated by the CI/CD pipeline
+envFrom: []
+# - configMapRef:
+#     name: my-config
+# - secretRef:
+#     name: my-secret
+
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
   enabled: false

@@ -52,7 +52,7 @@ public class CategoryService {
                 : categoryRepository.findBySiteId(siteId);
         return categories.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.util.CollectionUtils;
+import org.junit.jupiter.api.function.Executable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -124,9 +125,10 @@ class ProductServiceTest {
                 .status("SCHEDULED")
                 .build();
 
+        Executable executable = () -> productService.updateStatus(product.getId(), request);
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> productService.updateStatus(product.getId(), request));
+                executable);
 
         assertThat(exception.getMessage()).contains("scheduledPublishAt is required");
     }

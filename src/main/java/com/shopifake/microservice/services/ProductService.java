@@ -16,6 +16,7 @@ import com.shopifake.microservice.repositories.CategoryRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +27,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Business logic for catalog products.
@@ -129,15 +130,19 @@ public class ProductService {
 
         product.setStatus(newStatus);
 
-        if (newStatus == ProductStatus.PUBLISHED) {
-            product.setScheduledPublishAt(null);
-            product.setPublishedAt(LocalDateTime.now(clock));
-        } else if (newStatus == ProductStatus.SCHEDULED) {
-            product.setScheduledPublishAt(scheduledPublishAt);
-            product.setPublishedAt(null);
-        } else {
-            product.setScheduledPublishAt(null);
-            product.setPublishedAt(null);
+        switch (newStatus) {
+            case PUBLISHED -> {
+                product.setScheduledPublishAt(null);
+                product.setPublishedAt(LocalDateTime.now(clock));
+            }
+            case SCHEDULED -> {
+                product.setScheduledPublishAt(scheduledPublishAt);
+                product.setPublishedAt(null);
+            }
+            default -> {
+                product.setScheduledPublishAt(null);
+                product.setPublishedAt(null);
+            }
         }
 
         Product saved = productRepository.save(product);
@@ -157,7 +162,6 @@ public class ProductService {
      */
     @Transactional(readOnly = true)
     public List<ProductResponse> listProducts(final UUID siteId, final String status) {
-        publishDueProducts();
         List<Product> products;
         if (siteId != null && status != null) {
             products = productRepository.findBySiteIdAndStatus(siteId, parseStatus(status));
@@ -178,7 +182,6 @@ public class ProductService {
      */
     @Transactional(readOnly = true)
     public List<ProductResponse> listPublishedProducts(final UUID siteId) {
-        publishDueProducts();
         List<Product> products;
         if (siteId == null) {
             products = productRepository.findByStatus(ProductStatus.PUBLISHED);
@@ -360,7 +363,7 @@ public class ProductService {
         }
         return categories.stream()
                 .map(this::mapCategory)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private CategoryResponse mapCategory(final Category category) {
@@ -387,21 +390,6 @@ public class ProductService {
             throw new IllegalArgumentException("Categories must belong to the same site as the product");
         }
         return new HashSet<>(categories);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    private void publishDueProducts() {
-        List<Product> dueProducts = productRepository.findByStatusAndScheduledPublishAtBefore(
-                ProductStatus.SCHEDULED, LocalDateTime.now(clock));
-        if (dueProducts.isEmpty()) {
-            return;
-        }
-        dueProducts.forEach(product -> {
-            product.setStatus(ProductStatus.PUBLISHED);
-            product.setPublishedAt(LocalDateTime.now(clock));
-            product.setScheduledPublishAt(null);
-        });
-        productRepository.saveAll(dueProducts);
     }
 }
 

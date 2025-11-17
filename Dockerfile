@@ -19,4 +19,4 @@ ENV PORT=8080
 ENV SPRING_PROFILES_ACTIVE=prod
 COPY --from=build /app/target/*.jar /app/app.jar
 EXPOSE 8080
-ENTRYPOINT ["java","-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE}","-jar","/app/app.jar"]
+ENTRYPOINT java -Dspring.profiles.active=$SPRING_PROFILES_ACTIVE -jar /app/app.jar

@@ -1,5 +1,6 @@
 package com.shopifake.microservice.services;
 
+import com.shopifake.microservice.dtos.CategoryResponse;
 import com.shopifake.microservice.dtos.CreateProductRequest;
 import com.shopifake.microservice.dtos.ProductFilterRequest;
 import com.shopifake.microservice.dtos.ProductFilterResponse;
@@ -10,6 +11,8 @@ import com.shopifake.microservice.entities.FilterType;
 import com.shopifake.microservice.entities.Product;
 import com.shopifake.microservice.entities.ProductFilter;
 import com.shopifake.microservice.entities.ProductStatus;
+import com.shopifake.microservice.entities.Category;
+import com.shopifake.microservice.repositories.CategoryRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +27,9 @@ import java.net.URISyntaxException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -38,6 +42,7 @@ import java.util.stream.Collectors;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
     private final Clock clock = Clock.systemUTC();
 
     /**
@@ -48,8 +53,8 @@ public class ProductService {
         log.info("Creating product with SKU {}", request.getSku());
         validateSkuUniqueness(request.getSku(), null);
         validateImages(request.getImages());
-        List<String> normalizedCategories = normalizeCategories(request.getCategories());
         List<ProductFilter> filters = mapFilters(request.getFilters());
+        var categories = loadCategories(request.getSiteId(), request.getCategoryIds());
         ProductStatus status = parseStatus(request.getStatus());
         LocalDateTime scheduledPublishAt = validateSchedule(status, request.getScheduledPublishAt());
 
@@ -58,7 +63,7 @@ public class ProductService {
                 .name(request.getName().trim())
                 .description(request.getDescription().trim())
                 .images(new ArrayList<>(request.getImages()))
-                .categories(normalizedCategories)
+                .categories(categories)
                 .filters(filters)
                 .sku(request.getSku().toUpperCase())
                 .status(status)
@@ -93,11 +98,11 @@ public class ProductService {
             product.setImages(new ArrayList<>(request.getImages()));
         }
 
-        if (request.getCategories() != null) {
-            if (request.getCategories().isEmpty()) {
-                throw new IllegalArgumentException("Categories list cannot be empty");
+        if (request.getCategoryIds() != null) {
+            if (request.getCategoryIds().isEmpty()) {
+                throw new IllegalArgumentException("categoryIds cannot be empty");
             }
-            product.setCategories(normalizeCategories(request.getCategories()));
+            product.setCategories(loadCategories(product.getSiteId(), request.getCategoryIds()));
         }
 
         if (StringUtils.hasText(request.getSku())) {
@@ -225,18 +230,6 @@ public class ProductService {
         }
     }
 
-    private List<String> normalizeCategories(final List<String> categories) {
-        if (categories == null) {
-            return Collections.emptyList();
-        }
-        return categories.stream()
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .map(value -> value.toLowerCase().replace(' ', '-'))
-                .distinct()
-                .collect(Collectors.toList());
-    }
-
     private ProductStatus parseStatus(final String status) {
         try {
             return ProductStatus.valueOf(status.trim().toUpperCase());
@@ -350,7 +343,7 @@ public class ProductService {
                 .name(product.getName())
                 .description(product.getDescription())
                 .images(List.copyOf(product.getImages()))
-                .categories(List.copyOf(product.getCategories()))
+                .categories(mapCategoryResponses(product.getCategories()))
                 .sku(product.getSku())
                 .status(product.getStatus())
                 .scheduledPublishAt(product.getScheduledPublishAt())
@@ -359,6 +352,41 @@ public class ProductService {
                 .updatedAt(product.getUpdatedAt())
                 .filters(mapFilterResponses(product.getFilters()))
                 .build();
+    }
+
+    private List<CategoryResponse> mapCategoryResponses(final Set<Category> categories) {
+        if (categories == null) {
+            return List.of();
+        }
+        return categories.stream()
+                .map(this::mapCategory)
+                .collect(Collectors.toList());
+    }
+
+    private CategoryResponse mapCategory(final Category category) {
+        return CategoryResponse.builder()
+                .id(category.getId())
+                .siteId(category.getSiteId())
+                .name(category.getName())
+                .createdAt(category.getCreatedAt())
+                .build();
+    }
+
+    private Set<Category> loadCategories(final UUID siteId, final List<UUID> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            throw new IllegalArgumentException("categoryIds are required");
+        }
+        Set<UUID> uniqueIds = new HashSet<>(categoryIds);
+        List<Category> categories = categoryRepository.findAllById(uniqueIds);
+        if (categories.size() != uniqueIds.size()) {
+            throw new IllegalArgumentException("One or more categories do not exist");
+        }
+        boolean mismatchedSite = categories.stream()
+                .anyMatch(category -> !category.getSiteId().equals(siteId));
+        if (mismatchedSite) {
+            throw new IllegalArgumentException("Categories must belong to the same site as the product");
+        }
+        return new HashSet<>(categories);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

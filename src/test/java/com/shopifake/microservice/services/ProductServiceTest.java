@@ -2,8 +2,10 @@ package com.shopifake.microservice.services;
 
 import com.shopifake.microservice.dtos.CreateProductRequest;
 import com.shopifake.microservice.dtos.UpdateProductStatusRequest;
+import com.shopifake.microservice.entities.Category;
 import com.shopifake.microservice.entities.Product;
 import com.shopifake.microservice.entities.ProductStatus;
+import com.shopifake.microservice.repositories.CategoryRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,27 +39,41 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private CategoryRepository categoryRepository;
+
     @InjectMocks
     private ProductService productService;
 
     private CreateProductRequest validRequest;
+    private UUID categoryId;
+    private Category category;
 
     @BeforeEach
     void setUp() {
+        UUID siteId = UUID.randomUUID();
+        categoryId = UUID.randomUUID();
         validRequest = CreateProductRequest.builder()
-                .siteId(UUID.randomUUID())
+                .siteId(siteId)
                 .name("Premium Hoodie")
                 .description("Soft cotton hoodie")
                 .images(List.of("https://cdn.example.com/h1.png"))
-                .categories(List.of("apparel"))
+                .categoryIds(List.of(categoryId))
                 .sku("hoodie-001")
                 .status("DRAFT")
+                .build();
+
+        category = Category.builder()
+                .id(categoryId)
+                .siteId(siteId)
+                .name("Apparel")
                 .build();
     }
 
     @Test
     @DisplayName("Should persist a product when payload is valid")
     void shouldCreateProduct() {
+        when(categoryRepository.findAllById(any())).thenReturn(List.of(category));
         when(productRepository.findBySku("HOODIE-001")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
             Product product = invocation.getArgument(0);

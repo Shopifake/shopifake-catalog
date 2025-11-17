@@ -8,6 +8,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -18,7 +20,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,11 +55,14 @@ public class Product {
     @Builder.Default
     private List<String> images = new ArrayList<>();
 
-    @ElementCollection
-    @CollectionTable(name = "product_categories", joinColumns = @JoinColumn(name = "product_id"))
-    @Column(name = "category", nullable = false, length = 100)
+    @ManyToMany
+    @JoinTable(
+            name = "product_categories",
+            joinColumns = @JoinColumn(name = "product_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
     @Builder.Default
-    private List<String> categories = new ArrayList<>();
+    private Set<Category> categories = new HashSet<>();
 
     @ElementCollection
     @CollectionTable(name = "product_filters", joinColumns = @JoinColumn(name = "product_id"))

@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Partial update payload for products.
@@ -28,9 +29,7 @@ public class UpdateProductRequest {
             @Size(max = 2048, message = "Image URL is too long")
             String> images;
 
-    private List<
-            @Size(max = 100, message = "Category is too long")
-            String> categories;
+    private List<UUID> categoryIds;
 
     @Pattern(regexp = "^[A-Za-z0-9_-]+$", message = "SKU must be alphanumeric with dashes or underscores")
     @Size(max = 20, message = "SKU must not exceed 20 characters")

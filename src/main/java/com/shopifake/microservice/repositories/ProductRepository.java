@@ -25,6 +25,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findBySiteIdAndStatus(UUID siteId, ProductStatus status);
 
     List<Product> findByStatusAndScheduledPublishAtBefore(ProductStatus status, LocalDateTime before);
+
+    boolean existsByCategories_Id(UUID categoryId);
 }
 
 

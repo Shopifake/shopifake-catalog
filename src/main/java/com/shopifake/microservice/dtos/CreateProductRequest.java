@@ -41,10 +41,7 @@ public class CreateProductRequest {
             String> images;
 
     @NotEmpty(message = "At least one category is required")
-    private List<
-            @NotBlank(message = "Category cannot be blank")
-            @Size(max = 100, message = "Category is too long")
-            String> categories;
+    private List<@NotNull(message = "categoryId cannot be null") UUID> categoryIds;
 
     @Size(max = 20, message = "SKU must not exceed 20 characters")
     @Pattern(regexp = "^[A-Za-z0-9_-]+$", message = "SKU must be alphanumeric with dashes or underscores")

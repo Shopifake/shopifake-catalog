@@ -25,7 +25,7 @@ public class ProductResponse {
 
     List<String> images;
 
-    List<String> categories;
+    List<CategoryResponse> categories;
 
     String sku;
 

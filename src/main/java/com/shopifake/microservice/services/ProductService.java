@@ -2,7 +2,7 @@ package com.shopifake.microservice.services;
 
 import com.shopifake.microservice.dtos.CategoryResponse;
 import com.shopifake.microservice.dtos.CreateProductRequest;
-import com.shopifake.microservice.dtos.ProductFilterRequest;
+import com.shopifake.microservice.dtos.ProductFilterAssignmentRequest;
 import com.shopifake.microservice.dtos.ProductFilterResponse;
 import com.shopifake.microservice.dtos.ProductResponse;
 import com.shopifake.microservice.dtos.UpdateProductRequest;
@@ -12,7 +12,9 @@ import com.shopifake.microservice.entities.Product;
 import com.shopifake.microservice.entities.ProductFilter;
 import com.shopifake.microservice.entities.ProductStatus;
 import com.shopifake.microservice.entities.Category;
+import com.shopifake.microservice.entities.Filter;
 import com.shopifake.microservice.repositories.CategoryRepository;
+import com.shopifake.microservice.repositories.FilterRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final FilterRepository filterRepository;
     private final Clock clock = Clock.systemUTC();
 
     /**
@@ -54,8 +57,8 @@ public class ProductService {
         log.info("Creating product with SKU {}", request.getSku());
         validateSkuUniqueness(request.getSku(), null);
         validateImages(request.getImages());
-        List<ProductFilter> filters = mapFilters(request.getFilters());
         var categories = loadCategories(request.getSiteId(), request.getCategoryIds());
+        List<ProductFilter> filters = mapFilters(request.getFilters(), request.getSiteId());
         ProductStatus status = parseStatus(request.getStatus());
         LocalDateTime scheduledPublishAt = validateSchedule(status, request.getScheduledPublishAt());
 
@@ -65,12 +68,15 @@ public class ProductService {
                 .description(request.getDescription().trim())
                 .images(new ArrayList<>(request.getImages()))
                 .categories(categories)
-                .filters(filters)
                 .sku(request.getSku().toUpperCase())
                 .status(status)
                 .scheduledPublishAt(scheduledPublishAt)
                 .publishedAt(status == ProductStatus.PUBLISHED ? LocalDateTime.now(clock) : null)
                 .build();
+        
+        // Set product reference in filters
+        filters.forEach(filter -> filter.setProduct(product));
+        product.setFilters(filters);
 
         Product saved = productRepository.save(product);
         return mapToResponse(saved);
@@ -112,7 +118,11 @@ public class ProductService {
         }
 
         if (request.getFilters() != null) {
-            product.setFilters(mapFilters(request.getFilters()));
+            List<ProductFilter> filters = mapFilters(request.getFilters(), product.getSiteId());
+            // Clear existing filters and set new ones
+            product.getFilters().clear();
+            filters.forEach(filter -> filter.setProduct(product));
+            product.getFilters().addAll(filters);
         }
 
         Product saved = productRepository.save(product);
@@ -257,60 +267,111 @@ public class ProductService {
         return null;
     }
 
-    private List<ProductFilter> mapFilters(final List<ProductFilterRequest> filterRequests) {
-        if (filterRequests == null) {
+    private List<ProductFilter> mapFilters(final List<ProductFilterAssignmentRequest> filterRequests, final UUID siteId) {
+        if (filterRequests == null || filterRequests.isEmpty()) {
             return List.of();
         }
         return filterRequests.stream()
-                .map(this::mapFilter)
+                .map(request -> mapFilter(request, siteId))
                 .toList();
     }
 
-    private ProductFilter mapFilter(final ProductFilterRequest request) {
-        FilterType type = request.getType();
-        validateFilterPayload(request);
+    private ProductFilter mapFilter(final ProductFilterAssignmentRequest request, final UUID siteId) {
+        Filter filter = filterRepository.findById(request.getFilterId())
+                .orElseThrow(() -> new IllegalArgumentException("Filter not found: " + request.getFilterId()));
+        if (!filter.getSiteId().equals(siteId)) {
+            throw new IllegalArgumentException("Filter " + filter.getKey() + " does not belong to site " + siteId);
+        }
+
+        validateFilterPayload(request, filter);
+
         return ProductFilter.builder()
-                .key(request.getKey().trim())
-                .type(type)
+                .filter(filter)
                 .textValue(request.getTextValue())
                 .numericValue(request.getNumericValue())
                 .minValue(request.getMinValue())
                 .maxValue(request.getMaxValue())
                 .startAt(request.getStartAt())
                 .endAt(request.getEndAt())
-                .unit(request.getUnit())
                 .build();
     }
 
-    private void validateFilterPayload(final ProductFilterRequest request) {
-        FilterType type = request.getType();
+    private void validateFilterPayload(final ProductFilterAssignmentRequest request, final Filter filter) {
+        FilterType type = filter.getType();
+        String filterLabel = "filter " + filter.getKey();
+
         switch (type) {
-            case CATEGORICAL:
+            case CATEGORICAL -> {
                 if (!StringUtils.hasText(request.getTextValue())) {
-                    throw new IllegalArgumentException(
-                            "textValue is required for categorical filter " + request.getKey());
+                    throw new IllegalArgumentException("textValue is required for " + filterLabel);
                 }
-                break;
-            case QUANTITATIVE:
+                if (filter.getValues() != null && !filter.getValues().isEmpty()
+                        && !filter.getValues().contains(request.getTextValue())) {
+                    throw new IllegalArgumentException("textValue must match one of the allowed values for " + filterLabel);
+                }
+                ensureNull(request.getNumericValue(), "numericValue", filterLabel);
+                ensureNull(request.getMinValue(), "minValue", filterLabel);
+                ensureNull(request.getMaxValue(), "maxValue", filterLabel);
+                ensureNull(request.getStartAt(), "startAt", filterLabel);
+                ensureNull(request.getEndAt(), "endAt", filterLabel);
+            }
+            case QUANTITATIVE -> {
+                if (StringUtils.hasText(request.getTextValue())) {
+                    throw new IllegalArgumentException("textValue is not allowed for " + filterLabel);
+                }
                 if (request.getNumericValue() == null
                         && (request.getMinValue() == null || request.getMaxValue() == null)) {
                     throw new IllegalArgumentException(
-                            "Provide numericValue or min/max range for quantitative filter " + request.getKey());
+                            "Provide numericValue or min/max range for " + filterLabel);
                 }
                 validateNumericRange(request.getMinValue(), request.getMaxValue());
-                break;
-            case DATETIME:
+                validateValuesAgainstDefinition(request, filter, filterLabel);
+                ensureNull(request.getStartAt(), "startAt", filterLabel);
+                ensureNull(request.getEndAt(), "endAt", filterLabel);
+            }
+            case DATETIME -> {
                 if (request.getStartAt() == null) {
-                    throw new IllegalArgumentException(
-                            "startAt is required for datetime filter " + request.getKey());
+                    throw new IllegalArgumentException("startAt is required for " + filterLabel);
                 }
                 if (request.getEndAt() != null && request.getEndAt().isBefore(request.getStartAt())) {
-                    throw new IllegalArgumentException(
-                            "endAt must be after startAt for datetime filter " + request.getKey());
+                    throw new IllegalArgumentException("endAt must be after startAt for " + filterLabel);
                 }
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported filter type " + type);
+                ensureNull(request.getTextValue(), "textValue", filterLabel);
+                ensureNull(request.getNumericValue(), "numericValue", filterLabel);
+                ensureNull(request.getMinValue(), "minValue", filterLabel);
+                ensureNull(request.getMaxValue(), "maxValue", filterLabel);
+            }
+            default -> throw new IllegalArgumentException("Unsupported filter type " + type);
+        }
+    }
+
+    private void validateValuesAgainstDefinition(final ProductFilterAssignmentRequest request,
+                                                 final Filter filter,
+                                                 final String filterLabel) {
+        BigDecimal minValue = filter.getMinValue();
+        BigDecimal maxValue = filter.getMaxValue();
+
+        if (minValue != null) {
+            if (request.getNumericValue() != null && request.getNumericValue().compareTo(minValue) < 0) {
+                throw new IllegalArgumentException("numericValue must be >= " + minValue + " for " + filterLabel);
+            }
+            if (request.getMinValue() != null && request.getMinValue().compareTo(minValue) < 0) {
+                throw new IllegalArgumentException("minValue must be >= " + minValue + " for " + filterLabel);
+            }
+        }
+        if (maxValue != null) {
+            if (request.getNumericValue() != null && request.getNumericValue().compareTo(maxValue) > 0) {
+                throw new IllegalArgumentException("numericValue must be <= " + maxValue + " for " + filterLabel);
+            }
+            if (request.getMaxValue() != null && request.getMaxValue().compareTo(maxValue) > 0) {
+                throw new IllegalArgumentException("maxValue must be <= " + maxValue + " for " + filterLabel);
+            }
+        }
+    }
+
+    private void ensureNull(final Object value, final String fieldName, final String filterLabel) {
+        if (value != null) {
+            throw new IllegalArgumentException(fieldName + " is not supported for " + filterLabel);
         }
     }
 
@@ -320,22 +381,26 @@ public class ProductService {
         }
     }
 
+
     private List<ProductFilterResponse> mapFilterResponses(final List<ProductFilter> filters) {
         if (filters == null) {
             return List.of();
         }
         return filters.stream()
-                .map(filter -> ProductFilterResponse.builder()
-                        .key(filter.getKey())
-                        .type(filter.getType())
-                        .textValue(filter.getTextValue())
-                        .numericValue(filter.getNumericValue())
-                        .minValue(filter.getMinValue())
-                        .maxValue(filter.getMaxValue())
-                        .startAt(filter.getStartAt())
-                        .endAt(filter.getEndAt())
-                        .unit(filter.getUnit())
-                        .build())
+                .map(pf -> {
+                    Filter filter = pf.getFilter();
+                    return ProductFilterResponse.builder()
+                            .filterId(filter.getId())
+                            .key(filter.getKey())
+                            .type(filter.getType())
+                            .displayName(filter.getDisplayName())
+                            .textValue(pf.getTextValue())
+                            .numericValue(pf.getNumericValue())
+                            .startAt(pf.getStartAt())
+                            .endAt(pf.getEndAt())
+                            .unit(filter.getUnit())
+                            .build();
+                })
                 .toList();
     }
 

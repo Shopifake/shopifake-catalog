@@ -29,7 +29,7 @@ import java.util.UUID;
  * REST API for catalog products.
  */
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/api/catalog/products")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Catalog Products")

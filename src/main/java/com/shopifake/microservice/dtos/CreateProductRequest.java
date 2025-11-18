@@ -56,7 +56,7 @@ public class CreateProductRequest {
 
     @Valid
     @Builder.Default
-    private List<ProductFilterRequest> filters = List.of();
+    private List<ProductFilterAssignmentRequest> filters = List.of();
 }
 
 

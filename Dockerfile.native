@@ -1,0 +1,5 @@
+FROM debian:12-slim AS prod
+WORKDIR /app
+COPY target/microservice-template /app/application
+EXPOSE 8080
+ENTRYPOINT ["/app/application"]

@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -64,8 +65,7 @@ public class Product {
     @Builder.Default
     private Set<Category> categories = new HashSet<>();
 
-    @ElementCollection
-    @CollectionTable(name = "product_filters", joinColumns = @JoinColumn(name = "product_id"))
+    @OneToMany(mappedBy = "product", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ProductFilter> filters = new ArrayList<>();
 

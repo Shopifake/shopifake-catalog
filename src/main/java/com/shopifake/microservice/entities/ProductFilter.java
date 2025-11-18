@@ -1,9 +1,12 @@
 package com.shopifake.microservice.entities;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Embeddable;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,23 +14,30 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
- * Embeddable representation of a product filter attribute.
+ * Entity representing a product filter attribute with foreign key to Filter.
  */
-@Embeddable
+@Entity
+@Table(name = "product_filters")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductFilter {
 
-    @Column(name = "filter_key", nullable = false, length = 100)
-    private String key;
+    @Id
+    @Column(nullable = false, updatable = false)
+    private UUID id;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "filter_type", nullable = false, length = 25)
-    private FilterType type;
+    @ManyToOne
+    @JoinColumn(name = "filter_id", nullable = false)
+    private Filter filter;
+
+    @ManyToOne
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
 
     @Column(name = "text_value", length = 255)
     private String textValue;
@@ -47,8 +57,12 @@ public class ProductFilter {
     @Column(name = "end_at")
     private LocalDateTime endAt;
 
-    @Column(name = "unit", length = 25)
-    private String unit;
+    @PrePersist
+    void onCreate() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+    }
 }
 
 

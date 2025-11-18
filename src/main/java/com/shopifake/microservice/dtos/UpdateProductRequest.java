@@ -36,7 +36,7 @@ public class UpdateProductRequest {
     private String sku;
 
     @Valid
-    private List<ProductFilterRequest> filters;
+    private List<ProductFilterAssignmentRequest> filters;
 }
 
 

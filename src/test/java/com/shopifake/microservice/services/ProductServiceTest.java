@@ -6,6 +6,7 @@ import com.shopifake.microservice.entities.Category;
 import com.shopifake.microservice.entities.Product;
 import com.shopifake.microservice.entities.ProductStatus;
 import com.shopifake.microservice.repositories.CategoryRepository;
+import com.shopifake.microservice.repositories.FilterRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,6 +43,9 @@ class ProductServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private FilterRepository filterRepository;
 
     @InjectMocks
     private ProductService productService;

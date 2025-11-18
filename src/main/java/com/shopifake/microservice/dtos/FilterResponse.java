@@ -10,36 +10,23 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * DTO returned to clients describing a filter configured on a product.
+ * DTO representing a filter.
  */
 @Value
 @Builder
-public class ProductFilterResponse {
+public class FilterResponse {
 
-    UUID filterId;
-    String key;
+    UUID id;
+    UUID siteId;
     UUID categoryId;
     String categoryName;
-
+    String key;
     FilterType type;
-
     String displayName;
-
-    String textValue;
-
-    BigDecimal numericValue;
-
-    BigDecimal minValue;
-
-    BigDecimal maxValue;
-
-    LocalDateTime startAt;
-
-    LocalDateTime endAt;
-
     String unit;
-
     List<String> values;
+    BigDecimal minValue;
+    BigDecimal maxValue;
+    LocalDateTime createdAt;
 }
-
 

@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Business logic for catalog products.
@@ -58,7 +59,7 @@ public class ProductService {
         validateSkuUniqueness(request.getSku(), null);
         validateImages(request.getImages());
         var categories = loadCategories(request.getSiteId(), request.getCategoryIds());
-        List<ProductFilter> filters = mapFilters(request.getFilters(), request.getSiteId());
+        List<ProductFilter> filters = mapFilters(request.getFilters(), request.getSiteId(), categories);
         ProductStatus status = parseStatus(request.getStatus());
         LocalDateTime scheduledPublishAt = validateSchedule(status, request.getScheduledPublishAt());
 
@@ -118,7 +119,7 @@ public class ProductService {
         }
 
         if (request.getFilters() != null) {
-            List<ProductFilter> filters = mapFilters(request.getFilters(), product.getSiteId());
+            List<ProductFilter> filters = mapFilters(request.getFilters(), product.getSiteId(), product.getCategories());
             // Clear existing filters and set new ones
             product.getFilters().clear();
             filters.forEach(filter -> filter.setProduct(product));
@@ -267,20 +268,34 @@ public class ProductService {
         return null;
     }
 
-    private List<ProductFilter> mapFilters(final List<ProductFilterAssignmentRequest> filterRequests, final UUID siteId) {
+    private List<ProductFilter> mapFilters(final List<ProductFilterAssignmentRequest> filterRequests,
+                                           final UUID siteId,
+                                           final Set<Category> categories) {
         if (filterRequests == null || filterRequests.isEmpty()) {
             return List.of();
         }
+        if (categories == null || categories.isEmpty()) {
+            throw new IllegalArgumentException("Products must have at least one category before assigning filters");
+        }
+        Set<UUID> categoryIds = categories.stream()
+                .map(Category::getId)
+                .collect(Collectors.toUnmodifiableSet());
+
         return filterRequests.stream()
-                .map(request -> mapFilter(request, siteId))
+                .map(request -> mapFilter(request, siteId, categoryIds))
                 .toList();
     }
 
-    private ProductFilter mapFilter(final ProductFilterAssignmentRequest request, final UUID siteId) {
+    private ProductFilter mapFilter(final ProductFilterAssignmentRequest request,
+                                    final UUID siteId,
+                                    final Set<UUID> categoryIds) {
         Filter filter = filterRepository.findById(request.getFilterId())
                 .orElseThrow(() -> new IllegalArgumentException("Filter not found: " + request.getFilterId()));
         if (!filter.getSiteId().equals(siteId)) {
             throw new IllegalArgumentException("Filter " + filter.getKey() + " does not belong to site " + siteId);
+        }
+        if (filter.getCategory() == null || !categoryIds.contains(filter.getCategory().getId())) {
+            throw new IllegalArgumentException("Filter " + filter.getKey() + " is not allowed for the selected categories");
         }
 
         validateFilterPayload(request, filter);
@@ -392,6 +407,8 @@ public class ProductService {
                     return ProductFilterResponse.builder()
                             .filterId(filter.getId())
                             .key(filter.getKey())
+                            .categoryId(filter.getCategory() != null ? filter.getCategory().getId() : null)
+                            .categoryName(filter.getCategory() != null ? filter.getCategory().getName() : null)
                             .type(filter.getType())
                             .displayName(filter.getDisplayName())
                             .textValue(pf.getTextValue())

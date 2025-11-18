@@ -18,6 +18,8 @@ public class ProductFilterResponse {
 
     UUID filterId;
     String key;
+    UUID categoryId;
+    String categoryName;
 
     FilterType type;
 

@@ -2,8 +2,10 @@ package com.shopifake.microservice.services;
 
 import com.shopifake.microservice.dtos.CreateFilterRequest;
 import com.shopifake.microservice.dtos.FilterResponse;
+import com.shopifake.microservice.entities.Category;
 import com.shopifake.microservice.entities.Filter;
 import com.shopifake.microservice.entities.FilterType;
+import com.shopifake.microservice.repositories.CategoryRepository;
 import com.shopifake.microservice.repositories.FilterRepository;
 import com.shopifake.microservice.repositories.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,20 +29,30 @@ public class FilterService {
 
     private final FilterRepository filterRepository;
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
     /**
      * Create a filter for a site.
      */
     @Transactional
     public FilterResponse createFilter(final CreateFilterRequest request) {
-        if (filterRepository.existsBySiteIdAndKeyIgnoreCase(request.getSiteId(), request.getKey())) {
-            throw new IllegalArgumentException("Filter already exists for this site: " + request.getKey());
+        Category category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + request.getCategoryId()));
+
+        if (!category.getSiteId().equals(request.getSiteId())) {
+            throw new IllegalArgumentException("Category does not belong to site: " + request.getSiteId());
+        }
+
+        if (filterRepository.existsBySiteIdAndCategory_IdAndKeyIgnoreCase(
+                request.getSiteId(), category.getId(), request.getKey())) {
+            throw new IllegalArgumentException("Filter already exists for this category: " + request.getKey());
         }
 
         validateFilterRequest(request);
 
         Filter filter = Filter.builder()
                 .siteId(request.getSiteId())
+                .category(category)
                 .key(request.getKey().trim())
                 .type(request.getType())
                 .displayName(request.getDisplayName() != null ? request.getDisplayName().trim() : null)
@@ -128,6 +140,8 @@ public class FilterService {
         return FilterResponse.builder()
                 .id(filter.getId())
                 .siteId(filter.getSiteId())
+                .categoryId(filter.getCategory() != null ? filter.getCategory().getId() : null)
+                .categoryName(filter.getCategory() != null ? filter.getCategory().getName() : null)
                 .key(filter.getKey())
                 .type(filter.getType())
                 .displayName(filter.getDisplayName())

@@ -25,6 +25,9 @@ public class CreateFilterRequest {
     @NotNull(message = "siteId is required")
     private UUID siteId;
 
+    @NotNull(message = "categoryId is required")
+    private UUID categoryId;
+
     @NotBlank(message = "key is required")
     @Size(max = 100, message = "key must not exceed 100 characters")
     private String key;

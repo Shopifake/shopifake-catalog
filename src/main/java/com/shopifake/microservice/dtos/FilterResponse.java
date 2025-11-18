@@ -18,6 +18,8 @@ public class FilterResponse {
 
     UUID id;
     UUID siteId;
+    UUID categoryId;
+    String categoryName;
     String key;
     FilterType type;
     String displayName;

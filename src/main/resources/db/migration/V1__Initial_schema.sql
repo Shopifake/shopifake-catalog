@@ -52,6 +52,7 @@ CREATE INDEX idx_product_categories_category ON product_categories(category_id);
 CREATE TABLE filters (
     id UUID PRIMARY KEY,
     site_id UUID NOT NULL,
+    category_id UUID NOT NULL,
     filter_key VARCHAR(100) NOT NULL,
     filter_type VARCHAR(25) NOT NULL,
     display_name VARCHAR(255),
@@ -59,7 +60,9 @@ CREATE TABLE filters (
     min_value NUMERIC(19,2),
     max_value NUMERIC(19,2),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_filter_key_per_site UNIQUE (site_id, filter_key)
+    CONSTRAINT fk_filters_category FOREIGN KEY (category_id)
+        REFERENCES categories(id) ON DELETE CASCADE,
+    CONSTRAINT uq_filter_key_per_category UNIQUE (category_id, filter_key)
 );
 
 CREATE TABLE filter_values (
@@ -71,6 +74,7 @@ CREATE TABLE filter_values (
 );
 
 CREATE INDEX idx_filters_site ON filters(site_id);
+CREATE INDEX idx_filters_category ON filters(category_id);
 CREATE INDEX idx_filters_key ON filters(filter_key);
 
 -- Product filters referencing reusable filter definitions

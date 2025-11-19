@@ -1,7 +1,7 @@
 # Base configuration
 spring:
   application:
-    name: microservice-template
+    name: catalog-service
   
   jpa:
     open-in-view: false

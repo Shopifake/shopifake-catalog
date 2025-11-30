@@ -33,8 +33,13 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: when-authorized
-
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    export:
+      otlp:
+        url: ${OTLP_METRICS_URL}
 logging:
   level:
     root: WARN

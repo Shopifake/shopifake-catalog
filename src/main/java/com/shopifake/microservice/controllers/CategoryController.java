@@ -25,7 +25,7 @@ import java.util.UUID;
  * Category endpoints.
  */
 @RestController
-@RequestMapping("/api/catalog/products/categories")
+@RequestMapping("/products/categories")
 @RequiredArgsConstructor
 @Tag(name = "Catalog Categories")
 public class CategoryController {

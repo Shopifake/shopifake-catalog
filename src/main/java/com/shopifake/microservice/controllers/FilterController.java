@@ -25,7 +25,7 @@ import java.util.UUID;
  * Filter endpoints.
  */
 @RestController
-@RequestMapping("/api/catalog/filters")
+@RequestMapping("/filters")
 @RequiredArgsConstructor
 @Tag(name = "Catalog Filters")
 public class FilterController {

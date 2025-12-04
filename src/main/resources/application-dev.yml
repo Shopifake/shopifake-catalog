@@ -40,7 +40,7 @@ management:
     metrics:
       export:
         url: ${OTLP_METRICS_URL}
-        enabled: true
+        enabled: false
 
 cors:
   allowed-origins: "*"

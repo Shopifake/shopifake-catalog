@@ -32,3 +32,6 @@ logging:
     root: WARN
     com.shopifake.microservice: INFO
     org.hibernate.SQL: DEBUG
+
+# Avoid placeholder resolution failures in tests
+RECOMMENDER_URL: http://localhost:8000

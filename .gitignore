@@ -50,3 +50,9 @@ jacoco.exec
 *.h2.db
 
 src/main/resources/env.dev.properties
+docker-compose.yml
+.gitignore
+populate.sh
+seed-data/
+.github/*
+env.dev.properties

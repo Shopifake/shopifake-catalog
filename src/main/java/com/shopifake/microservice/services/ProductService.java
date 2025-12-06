@@ -57,7 +57,7 @@ public class ProductService {
     private final Clock clock = Clock.systemUTC();
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${RECOMMENDER_URL}")
+    @Value("${RECOMMENDER_URL:http://localhost:8000}")
     private String servicesRecommenderUrl;
 
     /**
@@ -232,13 +232,21 @@ public class ProductService {
     }
 
     private void sendProductToRecommender(final Product product) {
-        log.info("Sending product {} to recommender {}", product.getId(), servicesRecommenderUrl);
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                servicesRecommenderUrl + "/products/register/batch",
-                List.of(buildRecommenderPayload(product)),
-                String.class
-        );
-        log.debug("Recommender response status={} body={}", response.getStatusCode(), response.getBody());
+        if (!StringUtils.hasText(servicesRecommenderUrl)) {
+            log.warn("RECOMMENDER_URL not set; skipping recommender enqueue for product {}", product.getId());
+            return;
+        }
+        try {
+            log.info("Sending product {} to recommender {}", product.getId(), servicesRecommenderUrl);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    servicesRecommenderUrl + "/products/register/batch",
+                    List.of(buildRecommenderPayload(product)),
+                    String.class
+            );
+            log.debug("Recommender response status={} body={}", response.getStatusCode(), response.getBody());
+        } catch (Exception ex) {
+            log.warn("Failed to send product {} to recommender: {}", product.getId(), ex.getMessage());
+        }
     }
 
     private Map<String, Object> buildRecommenderPayload(final Product product) {
@@ -559,5 +567,4 @@ public class ProductService {
         return new HashSet<>(categories);
     }
 }
-
 

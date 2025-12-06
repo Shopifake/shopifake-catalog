@@ -19,10 +19,13 @@ import com.shopifake.microservice.repositories.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -31,8 +34,11 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,6 +55,10 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final FilterRepository filterRepository;
     private final Clock clock = Clock.systemUTC();
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${RECOMMENDER_URL:http://localhost:8000}")
+    private String servicesRecommenderUrl;
 
     /**
      * Create a new product with the provided payload.
@@ -80,6 +90,10 @@ public class ProductService {
         product.setFilters(filters);
 
         Product saved = productRepository.save(product);
+
+        // Send product to recommender
+        sendProductToRecommender(saved);
+
         return mapToResponse(saved);
     }
 
@@ -127,6 +141,10 @@ public class ProductService {
         }
 
         Product saved = productRepository.save(product);
+
+        // Send product to recommender
+        sendProductToRecommender(saved);
+        
         return mapToResponse(saved);
     }
 
@@ -211,6 +229,81 @@ public class ProductService {
             throw new IllegalArgumentException("Product not found with id " + productId);
         }
         productRepository.deleteById(productId);
+    }
+
+    private void sendProductToRecommender(final Product product) {
+        if (!StringUtils.hasText(servicesRecommenderUrl)) {
+            log.warn("RECOMMENDER_URL not set; skipping recommender enqueue for product {}", product.getId());
+            return;
+        }
+        try {
+            log.info("Sending product {} to recommender {}", product.getId(), servicesRecommenderUrl);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    servicesRecommenderUrl + "/products/register/batch",
+                    List.of(buildRecommenderPayload(product)),
+                    String.class
+            );
+            log.debug("Recommender response status={} body={}", response.getStatusCode(), response.getBody());
+        } catch (Exception ex) {
+            log.warn("Failed to send product {} to recommender: {}", product.getId(), ex.getMessage());
+        }
+    }
+
+    private Map<String, Object> buildRecommenderPayload(final Product product) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("product_id", product.getId().toString());
+        payload.put("site_id", product.getSiteId().toString());
+        payload.put("name", product.getName());
+        payload.put("description", product.getDescription());
+        payload.put("images", List.copyOf(product.getImages()));
+        payload.put("categories", product.getCategories().stream()
+                .map(this::mapCategoryPayload)
+                .toList());
+        payload.put("sku", product.getSku());
+        payload.put("status", product.getStatus().name());
+        payload.put("price", null);
+        payload.put("filters", product.getFilters().stream()
+                .map(this::mapFilterPayload)
+                .toList());
+        payload.put("metadata", Collections.emptyMap());
+        return payload;
+    }
+
+    private Map<String, Object> mapCategoryPayload(final Category category) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", category.getId().toString());
+        payload.put("site_id", category.getSiteId().toString());
+        payload.put("name", category.getName());
+        return payload;
+    }
+
+    private Map<String, Object> mapFilterPayload(final ProductFilter assignment) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        Filter filter = assignment.getFilter();
+        payload.put("id", filter.getId().toString());
+        payload.put("name", filter.getDisplayName() != null ? filter.getDisplayName() : filter.getKey());
+        payload.put("value", resolveFilterValue(assignment));
+        return payload;
+    }
+
+    private String resolveFilterValue(final ProductFilter assignment) {
+        if (StringUtils.hasText(assignment.getTextValue())) {
+            return assignment.getTextValue();
+        }
+        if (assignment.getNumericValue() != null) {
+            return assignment.getNumericValue().stripTrailingZeros().toPlainString();
+        }
+        if (assignment.getMinValue() != null || assignment.getMaxValue() != null) {
+            String min = assignment.getMinValue() != null ? assignment.getMinValue().stripTrailingZeros().toPlainString() : "";
+            String max = assignment.getMaxValue() != null ? assignment.getMaxValue().stripTrailingZeros().toPlainString() : "";
+            return (min + ":" + max).replaceAll("^:|:$", "");
+        }
+        if (assignment.getStartAt() != null || assignment.getEndAt() != null) {
+            return (assignment.getStartAt() != null ? assignment.getStartAt().toString() : "")
+                    + "->"
+                    + (assignment.getEndAt() != null ? assignment.getEndAt().toString() : "");
+        }
+        return null;
     }
 
     private Product getProductOrThrow(final UUID productId) {
@@ -474,5 +567,4 @@ public class ProductService {
         return new HashSet<>(categories);
     }
 }
-
 
